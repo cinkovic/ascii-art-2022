@@ -1,4 +1,3 @@
-# Community Version
 import argparse
 import webbrowser
 import re
@@ -18,155 +17,132 @@ from prompt_toolkit.completion import PathCompleter
 from rich.console import Console
 
 
-def scale_image(image, new_width=100):
-    """Resizes an image preserving the aspect ratio."""
-    (original_width, original_height) = image.size
-    aspect_ratio = original_height / float(original_width)
+def resize_image(image, new_width=100):
+    """
+    Resizes an image preserving the aspect ratio.
+    Adjusts height considering ASCII character proportions.
+    """
+    original_width, original_height = image.size
+    aspect_ratio = original_height / original_width
     new_height = int(aspect_ratio / 2 * new_width)
     return image.resize((new_width, new_height))
 
 
-def convert_to_grayscale(image):
+def convert_image_to_grayscale(image):
+    """Converts an image to grayscale."""
     return image.convert("L")
 
 
-def map_pixels_to_color(image, new_width=500, new_height=500):
-    b = (0, 0, 0)
-    y = (255, 255, 0)
-    w = (255,255,255)
-    # creating new image with two different colors. Mixing more colors makes image blur.
-    #ASCII_CHARS = [b, y, b, y]
-    ASCII_CHARS = [b, y, w]
-    
+def create_colored_image_matrix(image, new_width=500, new_height=500):
+    """Creates a new image with colored ASCII characters."""
+
     image = image.resize((new_width, new_height))
-    image = convert_to_grayscale(image)
-    pixels_in_image = list(image.getdata())
+    image = convert_image_to_grayscale(image)
+    pixels = list(image.getdata())
 
-    pixels_to_chars = [
-        ASCII_CHARS[int(pixel_value / 86)] for pixel_value in pixels_in_image
-    ]
-    #print(pixels_to_chars)
+    # Original ASCII color choices
+    ascii_colors = {
+        "pink": "\033[1;35m",
+        "blue": "\033[1;34m",
+        "yellow": "\033[1;33m",
+        "green": "\033[1;32m",
+        "red": "\033[1;31m",
+        "slate": "\033[1;30m"
+    }
     
-    # creating matrix to write new image with colors
-    arr_2d = []
-    arr3 = []
-    temp = 0
-    for j in range(0, new_height):
-        start_value = temp
-        end_value = new_width * (j + 1)
-        for i in range(start_value, end_value):
-            arr3.append(pixels_to_chars[i])
-        arr_2d.append(arr3)
-        arr3 = []
-        temp = end_value
-    #print(arr_2d)
-    # Re-writing  pixel
-    smiley = Image.new("RGB", (new_width, new_height))
-    for row in range(500):
-        for col in range(new_width):
-            smiley.putpixel((col, row), arr_2d[row][col])
-    return smiley.show()
+    # Convert pixels to ASCII color chars
+    ascii_color_chars = [ascii_colors[int(pixel / 86)] for pixel in pixels]
     
-
-def drawing(image_ascii):
-    # converting string to list
-    pixels_to_chars = []
-    for char in image_ascii:
-        pixels_to_chars.append(char)
-    # converting string to matrix
-    arr_2d = []
-    arr3 = []
-    temp = 0
-    new_width=100
-    new_height=int(len(pixels_to_chars)/new_width)
-
-    for j in range(0, new_height):
-        start_value = temp
-        end_value = new_width * (j + 1)
-        for i in range(start_value, end_value):
-            arr3.append(pixels_to_chars[i])
-        arr_2d.append(arr3)
-        arr3 = []
-        temp = end_value
-    #defining multiple colour   
-    pink = "\033[1;35m"    
-    blue = "\033[1;34m"
-    yellow = "\033[1;33m"
-    green = "\033[1;32m"
-    red = "\033[1;31m"
-    slat = "\033[1;30m"
-
-    #sketching with different colour
+    # Construct 2D array for new image
+    image_matrix = []
     for row in range(new_height):
-        if row%2 == 0:
-            color = red
-        elif row%3 == 0:
-            color = yellow 
+        start = row * new_width
+        end = start + new_width
+        image_matrix.append(ascii_color_chars[start:end])
+
+    return image_matrix
+
+
+
+def draw_ascii_art(image_ascii, new_width=100):
+    """Draws ASCII art with colors."""
+    ascii_chars = list(image_ascii)
+    new_height = len(ascii_chars) // new_width
+
+    color_palette = {
+        "pink": "\033[1;35m",    
+        "blue": "\033[1;34m",
+        "yellow": "\033[1;33m",
+        "green": "\033[1;32m",
+        "red": "\033[1;31m",
+        "slate": "\033[1;30m"
+    }
+
+    for row in range(new_height):
+        if row % 2 == 0:
+            color = color_palette["red"]
+        elif row % 3 == 0:
+            color = color_palette["yellow"]
         else:
-            color = slat
+            color = color_palette["slate"]
         
         for col in range(new_width):
             time.sleep(0.003)
             sys.stdout.write(color)
-            sys.stdout.write(arr_2d[row][col])
+            sys.stdout.write(ascii_chars[row * new_width + col])
             sys.stdout.flush()
-   
+
+
 def map_pixels_to_ascii_chars(image, range_width, ascii_chars):
-    """Maps each pixel to an ascii character based on the range
-    in which it lies.
+    """Maps each pixel to an ascii character based on the range in which it lies."""
+    pixels = list(image.getdata())
+    return [ascii_chars[int(pixel / range_width)] for pixel in pixels]
 
-    0-255 is divided into 11 ranges of 25 pixels each.
+
+def convert_image_to_ascii_art(image, ascii_chars, range_width, new_width=100, fix_aspect_ratio=False):
     """
-    pixels_in_image = list(image.getdata())
-    pixels_to_chars = [
-        ascii_chars[int(pixel_value / range_width)] for pixel_value in pixels_in_image
-    ]
+    Converts an image to ASCII art.
+    Adjusts aspect ratio if fix_aspect_ratio is True.
+    """
+    image = resize_image(image)
+    image = convert_image_to_grayscale(image)
 
-    return "".join(pixels_to_chars)
-
-
-def convert_image_to_ascii(
-    image,
-    ascii_chars,
-    range_width,
-    new_width=100,
-    fix_aspect_ratio=False,
-):
-    image = scale_image(image)
-    image = convert_to_grayscale(image)
-
-    pixels_to_chars = map_pixels_to_ascii_chars(image, range_width, ascii_chars)
-    len_pixels_to_chars = len(pixels_to_chars)
-
-    image_ascii = [
-        pixels_to_chars[index : index + new_width]
-        for index in range(0, len_pixels_to_chars, new_width)
+    ascii_chars = map_pixels_to_ascii_chars(image, range_width, ascii_chars)
+    ascii_art_lines = [
+        "".join(ascii_chars[index: index + new_width])
+        for index in range(0, len(ascii_chars), new_width)
     ]
 
     if fix_aspect_ratio:
         # The generated ASCII image is approximately 1.35 times
         # larger than the original image
         # So, we will drop one line after every 3 lines
-        image_ascii = [char for index, char in enumerate(image_ascii) if index % 4 != 0]
+        image_ascii = [char for index, char in enumerate(ascii_art_lines) if index % 4 != 0]
 
-    return "\n".join(image_ascii)
+    return "\n".join(ascii_art_lines)
 
 
 def single_ascii_replacement(image_ascii, single_ascii_char):
-    # Creating list for ASCII character and their count
-    asc_count = []
-    for asc_char in ["%", "?", "+", "°", "@", "O", "o", "#", "." ":", ",", "*", " "]:
-        asc_count.append((asc_char, image_ascii.count(asc_char)))
-    asc_count.sort(key=lambda x: x[1], reverse=True)
-    chr = asc_count[0][0]
+    """Count frequency of each character in the input string"""
+    char_freq = {}
+    for char in image_ascii:
+        if char not in char_freq:
+            char_freq[char] = 0
+        char_freq[char] += 1
 
-    # Replacing highest ASCII character with blank
-    new_image_re = re.sub(rf"{chr}", " ", image_ascii)
-    # Replacing ASCII characters with given single character
-    return re.sub(r"[!S%?+°@Oo#.:,*]", single_ascii_char, new_image_re)
+    # Find the most frequent character (excluding newline character)
+    most_freq_char = max(char_freq, key=lambda k: (char_freq[k], k != '\n'))
+
+    # Replace the most frequent character with space
+    image_ascii = image_ascii.replace(most_freq_char, ' ')
+
+    # Replace all other characters with the specified single character
+    return ''.join(single_ascii_char if char != ' ' and char != '\n' else char for char in image_ascii)
 
 
 def hype(console):
+    """Prints a dummy progress bar for user engagement."""
+    
     verbs = [
         "Articulating",
         "Coordinating",
@@ -225,15 +201,22 @@ def hype(console):
 
 
 def welcome_message(console):
+    """Prints a welcome message to the console."""
     console.print("[bold yellow] Welcome to ASCII ART Generator!")
 
 
 def handle_black_yellow(image):
-    map_pixels_to_color(image)
-
+    """Using the new function to create a colored image matrix"""
+    image_matrix = create_colored_image_matrix(image)
+    smiley = Image.new("RGB", (500, 500))
+    for row in range(500):
+        for col in range(500):
+            smiley.putpixel((col, row), image_matrix[row][col])
+    return smiley.show()
 
 
 def handle_image_print(image_ascii, color=None):
+    """Handles printing of ASCII art to the console."""
     console = Console()
 
     welcome_message(console)
@@ -248,23 +231,28 @@ def handle_image_print(image_ascii, color=None):
 
 
 def inverse_image_color(image):
+    """Inverts the color of the image."""
     return ImageChops.invert(image)
 
 
 def handle_image_conversion(image, range_width, ascii_chars, inverse_color):
+    """
+    Handles the conversion of an image to ASCII art.
+    """
     if inverse_color:
         image = inverse_image_color(image)
 
-    image_ascii = convert_image_to_ascii(
-        image, range_width=range_width, ascii_chars=ascii_chars
+    image_ascii = convert_image_to_ascii_art(
+        image, range_width=range_width, ascii_chars=ascii_chars, fix_aspect_ratio=False
     )
 
     return image_ascii
 
 
-def init_args_parser():
-    parser = argparse.ArgumentParser()
 
+def init_args_parser():
+    """Initializes and returns the argument parser."""
+    parser = argparse.ArgumentParser()
     charset_group = parser.add_mutually_exclusive_group()
 
     parser.add_argument(
@@ -353,6 +341,8 @@ def init_args_parser():
 
 
 def get_predefined_charset(preset=1):
+    """Returns a predefined set of ASCII characters based on the chosen preset."""
+    
     if preset == 1:
         return [" ", ".", "°", "*", "o", "O", "#", "@"]
     if preset == 2:
@@ -361,11 +351,13 @@ def get_predefined_charset(preset=1):
 
 
 def read_image_from_stdin(buffer):
+    """Reads image from stdin."""
     buffer = buffer.read()
     return Image.open(BytesIO(buffer))
 
 
 def ask_user_for_image_path_until_success(get_image):
+    """Asks user for a path to base image."""
     image = None
     while True:
         try:
@@ -406,6 +398,10 @@ def ask_user_for_image_path_until_success(get_image):
 
 
 def read_image_from_path(path=None):
+    """
+    Reads and returns an image from the given path.
+    Handles common errors and prompts the user until a valid image is provided.
+    """
     if path:
         return ask_user_for_image_path_until_success(lambda: Image.open(path))
     else:
@@ -418,6 +414,9 @@ def read_image_from_path(path=None):
 
 
 def handle_store_art(path, image_ascii, color):
+    """
+    Handles storing the ASCII art in a file.
+    """
     try:
         if path.suffix in (".txt", ".svg"):
             with open(path, "wt") as report_file:
@@ -441,6 +440,9 @@ def handle_store_art(path, image_ascii, color):
 
 
 def main():
+    """
+    Main function to execute the ASCII art generator.
+    """
     args = init_args_parser()
 
     if not args.stdin.isatty():
